@@ -10,7 +10,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                echo "Pulling latest code from GitHub..."
+                echo "Pulling latest code..."
                 checkout scm
             }
         }
@@ -19,37 +19,32 @@ pipeline {
             steps {
                 script {
                     echo "Building Docker image..."
-                    sh "docker build -t ${DOCKER_IMAGE} ."
+                    bat 'docker build -t %DOCKER_IMAGE% .'
 
-                    // Stop & remove existing container if running
-                    sh """
-                        if [ \$(docker ps -q -f name=${DOCKER_CONTAINER}) ]; then
-                            docker stop ${DOCKER_CONTAINER}
-                            docker rm ${DOCKER_CONTAINER}
-                        fi
+                    bat """
+                    if docker ps -q -f name=%DOCKER_CONTAINER% (
+                        docker stop %DOCKER_CONTAINER%
+                        docker rm %DOCKER_CONTAINER%
+                    )
                     """
 
                     echo "Starting Docker container..."
-                    sh "docker run -d -p ${APP_PORT}:8080 --name ${DOCKER_CONTAINER} ${DOCKER_IMAGE}"
+                    bat 'docker run -d -p %APP_PORT%:8080 --name %DOCKER_CONTAINER% %DOCKER_IMAGE%'
                 }
             }
         }
 
         stage('Verify Deployment') {
             steps {
-                echo "Checking if Docker container is running..."
-                sh "docker ps -a"
-                echo "✅ Deployment complete. Access app at http://localhost:${APP_PORT}/bank-simulator"
+                echo "Checking container..."
+                bat 'docker ps -a'
+                echo "Access app at http://localhost:%APP_PORT%/bank-simulator"
             }
         }
     }
 
     post {
-        success {
-            echo "🎉 Deployment succeeded!"
-        }
-        failure {
-            echo "❌ Deployment failed!"
-        }
+        success { echo "🎉 Deployment succeeded!" }
+        failure { echo "❌ Deployment failed!" }
     }
 }
