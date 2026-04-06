@@ -2,54 +2,58 @@ pipeline {
     agent any
 
     environment {
+        MVN_HOME = "/usr/local/maven"  // adjust if using custom Maven path
         DOCKER_IMAGE = "bank-management:latest"
-        CONTAINER_NAME = "bank-management"
-        HOST_PORT = "8081"   // Access app at localhost:8081
-        CONTAINER_PORT = "8080"
     }
 
     stages {
-        stage('Build Frontend') {
+        stage('Checkout') {
             steps {
-                dir('bank-frontend') {
-                    bat 'npm install'
-                    bat 'npm run build'
+                git branch: 'main', url: 'https://github.com/your-repo/bank-simulator.git'
+            }
+        }
+
+        stage('Frontend Build') {
+            steps {
+                dir('frontend') {
+                    sh 'npm install'
+                    sh 'npm run build'  // generates dist/
+                }
+                // Copy frontend build to backend webapp
+                sh 'cp -r frontend/dist/* backend/src/main/webapp/'
+            }
+        }
+
+        stage('Backend Build') {
+            steps {
+                dir('backend') {
+                    sh 'mvn clean package'
                 }
             }
         }
 
-        stage('Build Backend') {
+        stage('Docker Build') {
             steps {
-                dir('bank-simulator') {
-                    bat 'xcopy /E /I /Y "..\\bank-frontend\\dist\\*" "src\\main\\webapp\\"'
-                    bat 'mvn clean package'
-                }
+                sh "docker build -t ${DOCKER_IMAGE} ."
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Docker Run') {
             steps {
-                bat "docker build -t %DOCKER_IMAGE% ."
-            }
-        }
-
-        stage('Run Docker Container') {
-            steps {
-                // Stop and remove existing container if it exists
-                bat "docker stop %CONTAINER_NAME% || exit 0"
-                bat "docker rm %CONTAINER_NAME% || exit 0"
-                // Run new container
-                bat "docker run -d -p %HOST_PORT%:%CONTAINER_PORT% --name %CONTAINER_NAME% %DOCKER_IMAGE%"
+                // Stop & remove old container if exists
+                sh "docker rm -f bank-simulator || true"
+                // Run new container mapping host port 8081 to container 8080
+                sh "docker run -d --name bank-simulator -p 8081:8080 ${DOCKER_IMAGE}"
             }
         }
     }
 
     post {
         success {
-            echo "✅ Deployment Successful! Access at http://localhost:8081"
+            echo "Deployment Successful! Access the app at http://localhost:8081/"
         }
         failure {
-            echo "❌ Deployment Failed"
+            echo "Deployment Failed!"
         }
     }
 }
