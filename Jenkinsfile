@@ -2,66 +2,54 @@ pipeline {
     agent any
 
     environment {
-        FRONTEND_DIR = 'bank-frontend'
-        BACKEND_DIR = 'bank-simulator'
-        NODE_ENV = 'production'
+        DOCKER_IMAGE = "bank-simulator:latest"
+        DOCKER_CONTAINER = "bank-simulator-container"
+        APP_PORT = "8082"
     }
 
     stages {
-        stage('Checkout SCM') {
+        stage('Checkout') {
             steps {
+                echo "Pulling latest code from GitHub..."
                 checkout scm
             }
         }
 
-        stage('Frontend Build') {
+        stage('Build & Deploy Docker') {
             steps {
-                dir("${FRONTEND_DIR}") {
-                    echo "Installing frontend dependencies..."
-                    bat 'npm install'
+                script {
+                    echo "Building Docker image..."
+                    sh "docker build -t ${DOCKER_IMAGE} ."
 
-                    echo "Building frontend..."
-                    bat 'npx vite build'
+                    // Stop & remove existing container if running
+                    sh """
+                        if [ \$(docker ps -q -f name=${DOCKER_CONTAINER}) ]; then
+                            docker stop ${DOCKER_CONTAINER}
+                            docker rm ${DOCKER_CONTAINER}
+                        fi
+                    """
+
+                    echo "Starting Docker container..."
+                    sh "docker run -d -p ${APP_PORT}:8080 --name ${DOCKER_CONTAINER} ${DOCKER_IMAGE}"
                 }
             }
         }
 
-        stage('Backend Build') {
+        stage('Verify Deployment') {
             steps {
-                dir("${BACKEND_DIR}") {
-                    echo "Building backend WAR..."
-                    // Use Maven to build WAR
-                    bat 'mvn clean package'
-                }
-            }
-        }
-
-        stage('Docker Build') {
-            steps {
-                echo "Building Docker image..."
-                bat 'docker build -t bank-simulator:latest .'
-            }
-        }
-
-        stage('Docker Run') {
-            steps {
-                echo "Running Docker container..."
-                // Stop existing container if exists
-                bat '''
-                docker stop bank-simulator || echo "No existing container"
-                docker rm bank-simulator || echo "No existing container"
-                docker run -d -p 8080:8080 --name bank-simulator bank-simulator:latest
-                '''
+                echo "Checking if Docker container is running..."
+                sh "docker ps -a"
+                echo "✅ Deployment complete. Access app at http://localhost:${APP_PORT}/bank-simulator"
             }
         }
     }
 
     post {
         success {
-            echo 'Deployment Succeeded!'
+            echo "🎉 Deployment succeeded!"
         }
         failure {
-            echo 'Deployment Failed!'
+            echo "❌ Deployment failed!"
         }
     }
 }
