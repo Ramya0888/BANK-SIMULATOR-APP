@@ -2,23 +2,24 @@ pipeline {
     agent any
 
     environment {
-        // Add any environment variables here if needed
         NODE_ENV = 'production'
+        FRONTEND_DIR = 'bank-frontend'
+        BACKEND_DIR  = 'bank-simulator'
     }
 
     stages {
         stage('Checkout SCM') {
             steps {
-                // Checkout the main repo
                 checkout scm
             }
         }
 
         stage('Frontend Build') {
             steps {
-                dir('frontend') {
-                    // Windows uses bat instead of sh
+                dir("${FRONTEND_DIR}") {
+                    echo "Installing frontend dependencies..."
                     bat 'npm install'
+                    echo "Building frontend..."
                     bat 'npm run build'
                 }
             }
@@ -26,23 +27,28 @@ pipeline {
 
         stage('Backend Build') {
             steps {
-                dir('backend') {
-                    bat 'npm install'
-                    bat 'npm run build'
+                dir("${BACKEND_DIR}") {
+                    echo "Building backend WAR..."
+                    // If Maven backend
+                    bat 'mvn clean package'
+                    // If Gradle backend, replace with: bat 'gradle build'
                 }
             }
         }
 
         stage('Docker Build') {
             steps {
-                // Make sure Docker Desktop is running on Windows
+                echo "Building Docker image..."
                 bat 'docker build -t bank-simulator:latest .'
             }
         }
 
         stage('Docker Run') {
             steps {
-                bat 'docker run -d -p 3000:3000 --name bank-simulator bank-simulator:latest'
+                echo "Running Docker container..."
+                bat 'docker stop bank-simulator || echo "Container not running"'
+                bat 'docker rm bank-simulator || echo "Container not present"'
+                bat 'docker run -d -p 8080:8080 --name bank-simulator bank-simulator:latest'
             }
         }
     }
