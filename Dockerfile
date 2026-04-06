@@ -1,10 +1,10 @@
-# Use official Tomcat image with JDK 17
+# Use official Tomcat image with JDK
 FROM tomcat:10.1-jdk17
 
-# Remove default Tomcat apps to avoid conflicts
+# Remove default apps
 RUN rm -rf /usr/local/tomcat/webapps/*
 
-# Copy built WAR to Tomcat webapps as ROOT.war
+# Copy built WAR from backend target folder
 COPY bank-simulator/target/bank-simulator.war /usr/local/tomcat/webapps/ROOT.war
 
 # Expose Tomcat port

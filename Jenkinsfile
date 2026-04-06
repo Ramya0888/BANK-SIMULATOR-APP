@@ -2,9 +2,9 @@ pipeline {
     agent any
 
     environment {
-        NODE_ENV = 'production'
         FRONTEND_DIR = 'bank-frontend'
-        BACKEND_DIR  = 'bank-simulator'
+        BACKEND_DIR = 'bank-simulator'
+        NODE_ENV = 'production'
     }
 
     stages {
@@ -19,8 +19,9 @@ pipeline {
                 dir("${FRONTEND_DIR}") {
                     echo "Installing frontend dependencies..."
                     bat 'npm install'
+
                     echo "Building frontend..."
-                    bat 'npm run build'
+                    bat 'npx vite build'
                 }
             }
         }
@@ -29,9 +30,8 @@ pipeline {
             steps {
                 dir("${BACKEND_DIR}") {
                     echo "Building backend WAR..."
-                    // If Maven backend
+                    // Use Maven to build WAR
                     bat 'mvn clean package'
-                    // If Gradle backend, replace with: bat 'gradle build'
                 }
             }
         }
@@ -46,9 +46,12 @@ pipeline {
         stage('Docker Run') {
             steps {
                 echo "Running Docker container..."
-                bat 'docker stop bank-simulator || echo "Container not running"'
-                bat 'docker rm bank-simulator || echo "Container not present"'
-                bat 'docker run -d -p 8080:8080 --name bank-simulator bank-simulator:latest'
+                // Stop existing container if exists
+                bat '''
+                docker stop bank-simulator || echo "No existing container"
+                docker rm bank-simulator || echo "No existing container"
+                docker run -d -p 8080:8080 --name bank-simulator bank-simulator:latest
+                '''
             }
         }
     }
