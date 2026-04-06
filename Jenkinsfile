@@ -2,58 +2,57 @@ pipeline {
     agent any
 
     environment {
-        MVN_HOME = "/usr/local/maven"  // adjust if using custom Maven path
-        DOCKER_IMAGE = "bank-management:latest"
+        // Add any environment variables here if needed
+        NODE_ENV = 'production'
     }
 
     stages {
-        stage('Checkout') {
+        stage('Checkout SCM') {
             steps {
-                git branch: 'main', url: 'https://github.com/Ramya0888/BANK-SIMULATOR'
+                // Checkout the main repo
+                checkout scm
             }
         }
 
         stage('Frontend Build') {
             steps {
                 dir('frontend') {
-                    sh 'npm install'
-                    sh 'npm run build'  // generates dist/
+                    // Windows uses bat instead of sh
+                    bat 'npm install'
+                    bat 'npm run build'
                 }
-                // Copy frontend build to backend webapp
-                sh 'cp -r frontend/dist/* backend/src/main/webapp/'
             }
         }
 
         stage('Backend Build') {
             steps {
                 dir('backend') {
-                    sh 'mvn clean package'
+                    bat 'npm install'
+                    bat 'npm run build'
                 }
             }
         }
 
         stage('Docker Build') {
             steps {
-                sh "docker build -t ${DOCKER_IMAGE} ."
+                // Make sure Docker Desktop is running on Windows
+                bat 'docker build -t bank-simulator:latest .'
             }
         }
 
         stage('Docker Run') {
             steps {
-                // Stop & remove old container if exists
-                sh "docker rm -f bank-simulator || true"
-                // Run new container mapping host port 8081 to container 8080
-                sh "docker run -d --name bank-simulator -p 8081:8080 ${DOCKER_IMAGE}"
+                bat 'docker run -d -p 3000:3000 --name bank-simulator bank-simulator:latest'
             }
         }
     }
 
     post {
         success {
-            echo "Deployment Successful! Access the app at http://localhost:8081/"
+            echo 'Deployment Succeeded!'
         }
         failure {
-            echo "Deployment Failed!"
+            echo 'Deployment Failed!'
         }
     }
 }
