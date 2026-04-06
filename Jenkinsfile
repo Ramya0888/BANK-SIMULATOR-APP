@@ -1,50 +1,39 @@
-pipeline {
-    agent any
+# --------------------- FRONTEND BUILD ---------------------
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
 
-    environment {
-        DOCKER_IMAGE = "bank-simulator:latest"
-        DOCKER_CONTAINER = "bank-simulator-container"
-        APP_PORT = "8082"
-    }
+# Copy frontend package files and install dependencies
+COPY bank-frontend/package*.json ./
+RUN npm install
 
-    stages {
-        stage('Checkout') {
-            steps {
-                echo "Pulling latest code..."
-                checkout scm
-            }
-        }
+# Copy frontend source and build
+COPY bank-frontend/ . 
+RUN npm run build
 
-        stage('Build & Deploy Docker') {
-            steps {
-                script {
-                    echo "Building Docker image..."
-                    bat 'docker build -t %DOCKER_IMAGE% .'
+# --------------------- BACKEND BUILD ---------------------
+FROM maven:3.9.3-eclipse-temurin-20 AS backend-builder
+WORKDIR /app/backend
 
-                    bat """
-                    if docker ps -q -f name=%DOCKER_CONTAINER% (
-                        docker stop %DOCKER_CONTAINER%
-                        docker rm %DOCKER_CONTAINER%
-                    )
-                    """
+# Copy backend pom.xml and source, then package WAR
+COPY bank-simulator/pom.xml .
+COPY bank-simulator/src ./src
+RUN mvn clean package
 
-                    echo "Starting Docker container..."
-                    bat 'docker run -d -p %APP_PORT%:8080 --name %DOCKER_CONTAINER% %DOCKER_IMAGE%'
-                }
-            }
-        }
+# --------------------- FINAL TOMCAT IMAGE ---------------------
+FROM tomcat:10.1-jdk20-temurin
+WORKDIR /usr/local/tomcat/webapps/
 
-        stage('Verify Deployment') {
-            steps {
-                echo "Checking container..."
-                bat 'docker ps -a'
-                echo "Access app at http://localhost:%APP_PORT%/bank-simulator"
-            }
-        }
-    }
+# Remove default ROOT app
+RUN rm -rf ROOT
 
-    post {
-        success { echo "🎉 Deployment succeeded!" }
-        failure { echo "❌ Deployment failed!" }
-    }
-}
+# Copy backend WAR
+COPY --from=backend-builder /app/backend/target/bank-simulator.war ./bank-simulator.war
+
+# Copy frontend build inside a folder (optional, e.g., /bank-simulator)
+COPY --from=frontend-builder /app/frontend/dist ./bank-simulator
+
+# Expose Tomcat port
+EXPOSE 8082
+
+# Start Tomcat
+CMD ["catalina.sh", "run"]
